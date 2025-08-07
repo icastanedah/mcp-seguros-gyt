@@ -1,0 +1,1 @@
+# mcp-seguros-gyt
