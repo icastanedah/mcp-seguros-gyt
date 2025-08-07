@@ -215,6 +215,56 @@ file.separator=/
 
 ### Windows
 
+#### Error: "Connection Error - Check if your MCP server is running and proxy token is correct"
+
+**Causa**: El servidor MCP Java no se está ejecutando correctamente o hay problemas de comunicación.
+
+**Solución paso a paso**:
+
+1. **Usar el script de debug:**
+   ```cmd
+   start-mcp-debug.bat
+   ```
+
+2. **Si el debug no funciona, usar la versión específica para Windows:**
+   ```cmd
+   start-mcp-windows.bat
+   ```
+
+3. **Verificar manualmente:**
+   ```cmd
+   REM Verificar que Java está funcionando
+   java -version
+   
+   REM Verificar que el JAR existe
+   dir build\libs\mcp-graddle.jar
+   
+   REM Probar el JAR directamente
+   java -jar build\libs\mcp-graddle.jar
+   ```
+
+4. **Si el JAR no responde, recompilar:**
+   ```cmd
+   gradlew.bat clean build
+   ```
+
+5. **Verificar que no hay procesos bloqueando el puerto:**
+   ```cmd
+   netstat -ano | findstr :6274
+   taskkill /f /pid [PID]  REM Si hay un proceso usando el puerto
+   ```
+
+6. **Usar configuración manual:**
+   ```cmd
+   REM Abrir dos ventanas de CMD
+   
+   REM Ventana 1 - Servidor Java
+   java -jar build\libs\mcp-graddle.jar
+   
+   REM Ventana 2 - Inspector MCP
+   npx @modelcontextprotocol/inspector@0.15.0 java -jar build\libs\mcp-graddle.jar
+   ```
+
 #### Error: "Unable to access jarfile build\libs\mcp-graddle.jar"
 
 **Causa**: El archivo JAR no se encuentra o no se compiló correctamente.
