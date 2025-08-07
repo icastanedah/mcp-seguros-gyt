@@ -2,13 +2,28 @@ package org.example;
 
 import java.io.*;
 import java.util.Scanner;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Map;
 
 public class MCPClient {
     public static void main(String[] args) {
         try {
-            // Iniciar el servidor MCP como proceso
-            ProcessBuilder pb = new ProcessBuilder("java", "-cp", "build/libs/*", "org.example.mcp.MCPServer");
-            pb.directory(new File("c:/Users/icastaneda/Documents/hackaton/mcp-graddle"));
+            // Obtener el directorio actual del proyecto
+            String currentDir = System.getProperty("user.dir");
+            Path projectPath = Paths.get(currentDir);
+            
+            // Construir el classpath de forma segura
+            String classpath = projectPath.resolve("build").resolve("libs").resolve("*").toString();
+            
+            // Iniciar el servidor MCP como proceso con validación
+            ProcessBuilder pb = new ProcessBuilder("java", "-cp", classpath, "org.example.mcp.MCPServer");
+            pb.directory(projectPath.toFile());
+            
+            // Configurar variables de entorno seguras
+            Map<String, String> env = pb.environment();
+            env.put("JAVA_OPTS", "-Xmx512m");
+            
             Process serverProcess = pb.start();
             
             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(serverProcess.getOutputStream()));
@@ -27,8 +42,12 @@ public class MCPClient {
                 System.out.print("\n> ");
                 String input = scanner.nextLine();
                 
+                if (input == null || input.trim().isEmpty()) {
+                    continue;
+                }
+                
                 String command = "";
-                switch (input) {
+                switch (input.trim()) {
                     case "1":
                         command = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}";
                         break;
@@ -36,7 +55,9 @@ public class MCPClient {
                         command = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}";
                         break;
                     case "3":
-                        command = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"scan_repo\",\"arguments\":{\"repo_path\":\"C:\\\\Users\\\\icastaneda\\\\Documents\\\\walli-new-team\\\\policy-management\"}}}";
+                        // Usar el directorio actual como path por defecto
+                        String repoPath = currentDir.replace("\\", "\\\\");
+                        command = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"scan_repo\",\"arguments\":{\"repo_path\":\"" + repoPath + "\"}}}";
                         break;
                     case "q":
                         serverProcess.destroy();
@@ -52,11 +73,14 @@ public class MCPClient {
                 writer.flush();
                 
                 String response = reader.readLine();
-                System.out.println("📨 Respuesta: " + response);
+                if (response != null) {
+                    System.out.println("📨 Respuesta: " + response);
+                }
             }
             
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

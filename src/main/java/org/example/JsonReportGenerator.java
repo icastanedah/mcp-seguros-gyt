@@ -109,7 +109,7 @@ public class JsonReportGenerator {
         List<Map.Entry<String, Integer>> sortedViolations = data.violationsByType.entrySet()
             .stream()
             .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
-            .toList();
+            .collect(java.util.stream.Collectors.toList());
         
         for (int i = 0; i < sortedViolations.size(); i++) {
             Map.Entry<String, Integer> entry = sortedViolations.get(i);
@@ -130,7 +130,7 @@ public class JsonReportGenerator {
             .stream()
             .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
             .limit(15)
-            .toList();
+            .collect(java.util.stream.Collectors.toList());
         
         for (int i = 0; i < sortedFiles.size(); i++) {
             Map.Entry<String, Integer> entry = sortedFiles.get(i);
@@ -183,26 +183,42 @@ public class JsonReportGenerator {
     }
     
     private static String getViolationPriority(String type) {
-        return switch (type) {
-            case "EXCEPTION_GENERICA", "NUMERO_MAGICO" -> "high";
-            case "HARDCODED_STRING", "METODO_CAMELCASE", "VARIABLE_CAMELCASE" -> "medium";
-            default -> "low";
-        };
+        switch (type) {
+            case "EXCEPTION_GENERICA":
+            case "NUMERO_MAGICO":
+                return "high";
+            case "HARDCODED_STRING":
+            case "METODO_CAMELCASE":
+            case "VARIABLE_CAMELCASE":
+                return "medium";
+            default:
+                return "low";
+        }
     }
     
     private static String getViolationDescription(String type) {
-        return switch (type) {
-            case "HARDCODED_STRING" -> "Strings embebidos que deberían externalizarse";
-            case "JAVADOC_PUBLICO" -> "Clases públicas sin documentación JavaDoc";
-            case "METODO_PUBLICO_JAVADOC" -> "Métodos públicos sin documentación JavaDoc";
-            case "EXCEPTION_GENERICA" -> "Captura de Exception genérica en lugar de específica";
-            case "NUMERO_MAGICO" -> "Números literales sin contexto o constante";
-            case "METODO_CAMELCASE" -> "Nomenclatura incorrecta en métodos";
-            case "VARIABLE_CAMELCASE" -> "Nomenclatura incorrecta en variables";
-            case "IMPORT_WILDCARD" -> "Imports con asterisco que deberían ser específicos";
-            case "CONSTANTE_UPPERCASE" -> "Constantes que no siguen convención UPPER_CASE";
-            default -> "Violación de política de desarrollo";
-        };
+        switch (type) {
+            case "HARDCODED_STRING":
+                return "Strings embebidos que deberían externalizarse";
+            case "JAVADOC_PUBLICO":
+                return "Clases públicas sin documentación JavaDoc";
+            case "METODO_PUBLICO_JAVADOC":
+                return "Métodos públicos sin documentación JavaDoc";
+            case "EXCEPTION_GENERICA":
+                return "Captura de Exception genérica en lugar de específica";
+            case "NUMERO_MAGICO":
+                return "Números literales sin contexto o constante";
+            case "METODO_CAMELCASE":
+                return "Nomenclatura incorrecta en métodos";
+            case "VARIABLE_CAMELCASE":
+                return "Nomenclatura incorrecta en variables";
+            case "IMPORT_WILDCARD":
+                return "Imports con asterisco que deberían ser específicos";
+            case "CONSTANTE_UPPERCASE":
+                return "Constantes que no siguen convención UPPER_CASE";
+            default:
+                return "Violación de política de desarrollo";
+        }
     }
     
     private static String escapeJson(String text) {

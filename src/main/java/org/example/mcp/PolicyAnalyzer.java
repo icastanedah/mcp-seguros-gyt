@@ -47,9 +47,20 @@ public class PolicyAnalyzer {
     
     public String analyzeCode(String filePath) {
         try {
-            Path path = Paths.get(filePath);
+            // Validar input usando la clase Config
+            if (!Config.isPathSafe(filePath)) {
+                return "❌ Error: Path del archivo no es seguro o no existe: " + filePath;
+            }
+            
+            Path path = Paths.get(filePath).normalize();
+            
+            // Validar que el archivo existe y es accesible
             if (!Files.exists(path)) {
                 return "❌ Archivo no encontrado: " + filePath;
+            }
+            
+            if (!Files.isReadable(path)) {
+                return "❌ No se puede leer el archivo: " + filePath;
             }
             
             List<PolicyViolation> violations = new ArrayList<>();
@@ -57,6 +68,8 @@ public class PolicyAnalyzer {
             
             return formatPolicyResults(violations, filePath);
             
+        } catch (SecurityException e) {
+            return "❌ Error de seguridad: " + e.getMessage();
         } catch (Exception e) {
             return "❌ Error analizando código: " + e.getMessage();
         }
@@ -64,9 +77,17 @@ public class PolicyAnalyzer {
     
     public String analyzeRepository(String repoPath) {
         try {
-            Path path = Paths.get(repoPath);
+            // Resolver el path completo
+            Path path = resolvePath(repoPath);
+            
+            // Validar que el repositorio existe y es accesible
             if (!Files.exists(path)) {
-                return "❌ Repositorio no encontrado: " + repoPath;
+                return "❌ Repositorio no encontrado: " + repoPath + " (ruta completa: " + path + ")\n" +
+                       "💡 Intenta usar 'auto' para búsqueda automática o verifica la ruta.";
+            }
+            
+            if (!Files.isReadable(path)) {
+                return "❌ No se puede leer el repositorio: " + repoPath;
             }
             
             List<PolicyViolation> violations = new ArrayList<>();
@@ -74,16 +95,51 @@ public class PolicyAnalyzer {
             
             return formatPolicyResults(violations, repoPath);
             
+        } catch (SecurityException e) {
+            return "❌ Error de seguridad: " + e.getMessage();
         } catch (Exception e) {
-            return "❌ Error: " + e.getMessage();
+            return "❌ Error analizando código: " + e.getMessage();
         }
     }
     
+    /**
+     * Resuelve un path relativo o absoluto
+     */
+    private Path resolvePath(String repoPath) {
+        Path path = Paths.get(repoPath).normalize();
+        
+        if (path.isAbsolute()) {
+            return path;
+        }
+        
+        // Si el path comienza con "Documents/", intentar resolver desde el home del usuario
+        if (repoPath.startsWith("Documents/") || repoPath.startsWith("Documents\\\\")) {
+            String homeDir = System.getProperty("user.home");
+            return Paths.get(homeDir).resolve(repoPath).normalize();
+        }
+        
+        // Intentar resolver desde el directorio actual
+        Path currentDir = Paths.get(Config.getWorkingDirectory());
+        Path resolvedPath = currentDir.resolve(path).normalize();
+        
+        if (Files.exists(resolvedPath)) {
+            return resolvedPath;
+        }
+        
+        // Si no existe, devolver el path original
+        return path;
+    }
+    
     private void analyzeDirectory(Path dir, List<PolicyViolation> violations) throws IOException {
-        Files.walk(dir)
-            .filter(Files::isRegularFile)
-            .filter(this::isSupportedFile)
-            .forEach(file -> analyzeFile(file, violations));
+        // Limitar la profundidad de búsqueda para evitar timeouts
+        int maxDepth = 3;
+        
+        try (var stream = Files.walk(dir, maxDepth)) {
+            stream.filter(this::isSupportedFile)
+                  .filter(this::isReadableFile)
+                  .limit(50) // Limitar el número de archivos para evitar timeouts
+                  .forEach(file -> analyzeFile(file, violations));
+        }
     }
     
     private boolean isSupportedFile(Path file) {
@@ -91,21 +147,60 @@ public class PolicyAnalyzer {
         return name.endsWith(".java") || name.endsWith(".js") || name.endsWith(".ts");
     }
     
+    private boolean isReadableFile(Path file) {
+        try {
+            return Files.isReadable(file) && Files.size(file) <= Config.getMaxFileSize();
+        } catch (IOException e) {
+            return false;
+        }
+    }
+    
     private void analyzeFile(Path file, List<PolicyViolation> violations) {
         try {
-            String content = new String(Files.readAllBytes(file));
+            // Verificar tamaño del archivo
+            long fileSize = Files.size(file);
+            if (fileSize > Config.getMaxFileSize()) {
+                violations.add(new PolicyViolation(
+                    "FILE_TOO_LARGE", "MEDIO", "Archivo demasiado grande para analizar",
+                    file.toString(), 0, "Tamaño: " + fileSize + " bytes"
+                ));
+                return;
+            }
+            
+            String content = new String(Files.readAllBytes(file), java.nio.charset.Charset.forName(Config.getFileEncoding()));
             String extension = getFileExtension(file);
             List<PolicyRule> fileRules = rules.get(extension);
             if (fileRules == null) return;
             
             String[] lines = content.split("\\n");
-            for (int i = 0; i < lines.length; i++) {
+            int maxLines = Math.min(lines.length, 1000); // Limitar el número de líneas para evitar timeouts
+            
+            for (int i = 0; i < maxLines; i++) {
+                String line = lines[i];
+                
+                // Validar longitud de línea
+                if (line.length() > Config.getMaxLineLength()) {
+                    violations.add(new PolicyViolation(
+                        "LINE_TOO_LONG", "BAJO", "Línea demasiado larga",
+                        file.toString(), i + 1, "Longitud: " + line.length() + " caracteres"
+                    ));
+                    continue;
+                }
+                
                 for (PolicyRule rule : fileRules) {
-                    if (Pattern.compile(rule.pattern).matcher(lines[i]).find()) {
-                        violations.add(new PolicyViolation(
-                            rule.name, rule.severity, rule.solution,
-                            file.toString(), i + 1, lines[i].trim()
-                        ));
+                    try {
+                        if (Pattern.compile(rule.pattern).matcher(line).find()) {
+                            violations.add(new PolicyViolation(
+                                rule.name, rule.severity, rule.solution,
+                                file.toString(), i + 1, line.trim()
+                            ));
+                            // Limitar el número de violations por archivo para evitar timeouts
+                            if (violations.size() >= 20) {
+                                return;
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Ignorar patrones regex inválidos
                     }
                 }
             }
@@ -122,31 +217,32 @@ public class PolicyAnalyzer {
     
     private String formatPolicyResults(List<PolicyViolation> violations, String path) {
         if (violations.isEmpty()) {
-            return "✅ Código cumple con las políticas de desarrollo\\n📁 " + path;
+            return "✅ Código cumple con las políticas de desarrollo\n📁 " + path;
         }
         
         StringBuilder result = new StringBuilder();
-        result.append("📋 ANÁLISIS DE POLÍTICAS DE DESARROLLO\\n");
-        result.append("📁 ").append(path).append("\\n");
-        result.append("📊 Violaciones encontradas: ").append(violations.size()).append("\\n\\n");
+        result.append("📋 ANÁLISIS DE POLÍTICAS DE DESARROLLO\n");
+        result.append("📁 ").append(path).append("\n");
+        result.append("📊 Violaciones encontradas: ").append(violations.size()).append("\n\n");
         
         Map<String, Integer> severityCount = new HashMap<>();
         for (PolicyViolation violation : violations) {
             severityCount.merge(violation.severity, 1, Integer::sum);
-            result.append(formatViolation(violation)).append("\\n");
+            result.append(formatViolation(violation)).append("\n");
         }
         
-        result.append("\\n📈 RESUMEN:\\n");
+        result.append("\n📈 RESUMEN:\n");
         severityCount.forEach((severity, count) -> 
-            result.append(getSeverityIcon(severity)).append(" ").append(severity).append(": ").append(count).append("\\n"));
+            result.append(getSeverityIcon(severity)).append(" ").append(severity).append(": ").append(count).append("\n"));
         
         return result.toString();
     }
     
     private String formatViolation(PolicyViolation violation) {
-        return String.format("%s %s\\n📁 %s:%d\\n💻 %s\\n🔧 %s\\n",
+        String fileName = violation.file.substring(violation.file.lastIndexOf(Config.getFileSeparator()) + 1);
+        return String.format("%s %s\n📁 %s:%d\n💻 %s\n🔧 %s\n",
             getSeverityIcon(violation.severity), violation.name,
-            violation.file.substring(violation.file.lastIndexOf('\\') + 1), violation.line,
+            fileName, violation.line,
             violation.code,
             violation.solution);
     }

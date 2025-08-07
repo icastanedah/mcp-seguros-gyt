@@ -119,10 +119,16 @@ public class SimpleAnalysisProcessor {
     }
     
     private static String getPriority(String violationType) {
-        return switch (violationType) {
-            case "EXCEPTION_GENERICA", "NUMERO_MAGICO" -> "🔴";
-            case "HARDCODED_STRING", "METODO_CAMELCASE", "VARIABLE_CAMELCASE" -> "🟡";
-            default -> "🟢";
-        };
+        switch (violationType) {
+            case "EXCEPTION_GENERICA":
+            case "NUMERO_MAGICO":
+                return "🔴";
+            case "HARDCODED_STRING":
+            case "METODO_CAMELCASE":
+            case "VARIABLE_CAMELCASE":
+                return "🟡";
+            default:
+                return "🟢";
+        }
     }
 }

@@ -1,3 +1,0 @@
-@echo off
-echo Compilando sin clean...
-gradlew build --no-daemon --rerun-tasks

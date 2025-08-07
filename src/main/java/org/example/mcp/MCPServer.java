@@ -20,50 +20,11 @@ public class MCPServer {
     }
 
     private void initializeTools() {
-        Map<String, Object> calcProps = new HashMap<>();
-        Map<String, Object> exprProp = new HashMap<>();
-        exprProp.put("type", "string");
-        exprProp.put("description", "Mathematical expression to evaluate");
-        calcProps.put("expression", exprProp);
-        
-        Map<String, Object> calcSchema = new HashMap<>();
-        calcSchema.put("type", "object");
-        calcSchema.put("properties", calcProps);
-        List<String> calcRequired = new ArrayList<>();
-        calcRequired.add("expression");
-        calcSchema.put("required", calcRequired);
-
-        tools.put("calculator", new Tool(
-                "calculator",
-                "Evaluate mathematical expressions",
-                calcSchema
-        ));
-
-        // Ejemplo de herramienta: echo
-        Map<String, Object> echoProps = new HashMap<>();
-        Map<String, Object> msgProp = new HashMap<>();
-        msgProp.put("type", "string");
-        msgProp.put("description", "Message to echo back");
-        echoProps.put("message", msgProp);
-        
-        Map<String, Object> echoSchema = new HashMap<>();
-        echoSchema.put("type", "object");
-        echoSchema.put("properties", echoProps);
-        List<String> echoRequired = new ArrayList<>();
-        echoRequired.add("message");
-        echoSchema.put("required", echoRequired);
-
-        tools.put("echo", new Tool(
-                "echo",
-                "Echo back the provided message",
-                echoSchema
-        ));
-
-        // Herramienta de seguridad
+        // Herramienta de seguridad - SIMPLIFICADA
         Map<String, Object> secProps = new HashMap<>();
         Map<String, Object> pathProp = new HashMap<>();
         pathProp.put("type", "string");
-        pathProp.put("description", "Path del repositorio a escanear");
+        pathProp.put("description", "Path del repositorio a escanear (o 'auto' para búsqueda automática)");
         secProps.put("repo_path", pathProp);
         
         Map<String, Object> securitySchema = new HashMap<>();
@@ -75,11 +36,11 @@ public class MCPServer {
 
         tools.put("scan_repo", new Tool(
                 "scan_repo",
-                "Escanea repositorio por vulnerabilidades de seguridad",
+                "Escanea repositorio por vulnerabilidades de seguridad y problemas de desarrollo",
                 securitySchema
         ));
 
-        // Herramienta de análisis de políticas de código
+        // Herramienta de análisis de políticas
         Map<String, Object> policyProps = new HashMap<>();
         Map<String, Object> codePathProp = new HashMap<>();
         codePathProp.put("type", "string");
@@ -93,65 +54,51 @@ public class MCPServer {
         policyRequired.add("code_path");
         policySchema.put("required", policyRequired);
 
-        tools.put("check_policies", new Tool(
-                "check_policies",
+        tools.put("analyze_policies", new Tool(
+                "analyze_policies",
                 "Analiza código para verificar cumplimiento de políticas de desarrollo",
-                policySchema
-        ));
-
-        // Herramienta de análisis de archivo específico
-        tools.put("analyze_file", new Tool(
-                "analyze_file",
-                "Analiza un archivo específico contra políticas de desarrollo",
                 policySchema
         ));
     }
 
     public void start() {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(System.out))) {
-
+        System.err.println("🚀 MCP Server iniciando...");
+        
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in, "UTF-8"));
+             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(System.out, "UTF-8"))) {
+            
             String line;
             while ((line = reader.readLine()) != null) {
-                line = line.trim();
-                if (line.isEmpty()) {
-                    continue;
-                }
-                
                 try {
+                    System.err.println("📥 Recibido: " + line);
+                    
                     MCPMessage request = objectMapper.readValue(line, MCPMessage.class);
-                    
-                    // Asegurar que el request tenga un ID válido
-                    if (request.getId() == null) {
-                        request.setId("default-id");
-                    }
-                    
                     MCPResponse response = handleRequest(request);
-
-                    if (response != null) {
-                        String responseJson = objectMapper.writeValueAsString(response);
-                        writer.write(responseJson);
-                        writer.newLine();
-                        writer.flush();
-                    }
+                    
+                    String responseJson = objectMapper.writeValueAsString(response);
+                    System.err.println("📤 Enviando: " + responseJson);
+                    
+                    writer.write(responseJson);
+                    writer.newLine();
+                    writer.flush();
+                    
                 } catch (Exception e) {
-                    // Crear respuesta de error válida con ID por defecto
-                    MCPResponse errorResponse = new MCPResponse("parse-error");
-                    errorResponse.setError(new MCPError(-32700, "Parse error: " + e.getMessage()));
-
+                    System.err.println("❌ Error procesando request: " + e.getMessage());
+                    MCPResponse errorResponse = new MCPResponse("error");
+                    errorResponse.setError(new MCPError(-32603, "Internal error: " + e.getMessage()));
+                    
                     try {
                         String errorJson = objectMapper.writeValueAsString(errorResponse);
                         writer.write(errorJson);
                         writer.newLine();
                         writer.flush();
-                    } catch (Exception writeError) {
-                        // Error crítico - no podemos escribir la respuesta
-                        System.err.println("Critical error writing response: " + writeError.getMessage());
+                    } catch (Exception ex) {
+                        System.err.println("❌ Error enviando error response: " + ex.getMessage());
                     }
                 }
             }
         } catch (IOException e) {
-            // Error silencioso
+            System.err.println("❌ Error de I/O: " + e.getMessage());
         }
     }
 
@@ -166,23 +113,30 @@ public class MCPServer {
                 return response;
             }
             
+            System.err.println("🔧 Procesando método: " + method);
+            
             switch (method) {
                 case "initialize":
+                    System.err.println("✅ Inicializando...");
                     response.setResult(handleInitialize());
                     break;
                 case "tools/list":
+                    System.err.println("📋 Listando herramientas...");
                     response.setResult(handleToolsList());
                     break;
                 case "tools/call":
+                    System.err.println("🛠️ Ejecutando herramienta...");
                     response.setResult(handleToolCall(request.getParams()));
                     break;
                 default:
+                    System.err.println("❌ Método no soportado: " + method);
                     response.setError(new MCPError(-32601, "Method not found: " + method));
             }
         } catch (Exception e) {
+            System.err.println("❌ Error en handleRequest: " + e.getMessage());
             response.setError(new MCPError(-32603, "Internal error: " + e.getMessage()));
         }
-
+        
         return response;
     }
 
@@ -203,53 +157,115 @@ public class MCPServer {
     }
 
     private Map<String, Object> handleToolsList() {
+        System.err.println("📋 Preparando lista de herramientas...");
+        
         Map<String, Object> result = new HashMap<>();
-        result.put("tools", new ArrayList<>(tools.values()));
+        List<Map<String, Object>> toolsList = new ArrayList<>();
+        
+        for (Tool tool : tools.values()) {
+            Map<String, Object> toolMap = new HashMap<>();
+            toolMap.put("name", tool.getName());
+            toolMap.put("description", tool.getDescription());
+            toolMap.put("inputSchema", tool.getInputSchema());
+            toolsList.add(toolMap);
+            System.err.println("➕ Agregada herramienta: " + tool.getName());
+        }
+        
+        result.put("tools", toolsList);
+        System.err.println("✅ Retornando " + toolsList.size() + " herramientas");
         return result;
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> handleToolCall(Object params) {
-        Map<String, Object> paramMap = (Map<String, Object>) params;
-        String toolName = (String) paramMap.get("name");
-        Map<String, Object> arguments = (Map<String, Object>) paramMap.get("arguments");
-
-        if (!tools.containsKey(toolName)) {
-            throw new RuntimeException("Tool not found: " + toolName);
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            if (!(params instanceof Map)) {
+                List<Map<String, Object>> content = new ArrayList<>();
+                Map<String, Object> textContent = new HashMap<>();
+                textContent.put("type", "text");
+                textContent.put("text", "❌ Error: Parámetros inválidos");
+                content.add(textContent);
+                result.put("content", content);
+                return result;
+            }
+            
+            Map<String, Object> paramsMap = (Map<String, Object>) params;
+            String toolName = (String) paramsMap.get("name");
+            Map<String, Object> arguments = (Map<String, Object>) paramsMap.get("arguments");
+            
+            if (toolName == null) {
+                List<Map<String, Object>> content = new ArrayList<>();
+                Map<String, Object> textContent = new HashMap<>();
+                textContent.put("type", "text");
+                textContent.put("text", "❌ Error: Nombre de herramienta requerido");
+                content.add(textContent);
+                result.put("content", content);
+                return result;
+            }
+            
+            if (arguments == null) {
+                arguments = new HashMap<>();
+            }
+            
+            System.err.println("🛠️ Ejecutando herramienta: " + toolName + " con argumentos: " + arguments);
+            
+            String toolResult = executeTool(toolName, arguments);
+            
+            // Crear el content como un array con un objeto de texto
+            List<Map<String, Object>> content = new ArrayList<>();
+            Map<String, Object> textContent = new HashMap<>();
+            textContent.put("type", "text");
+            textContent.put("text", toolResult);
+            content.add(textContent);
+            result.put("content", content);
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error ejecutando herramienta: " + e.getMessage());
+            List<Map<String, Object>> content = new ArrayList<>();
+            Map<String, Object> textContent = new HashMap<>();
+            textContent.put("type", "text");
+            textContent.put("text", "❌ Error ejecutando herramienta: " + e.getMessage());
+            content.add(textContent);
+            result.put("content", content);
         }
-
-        // Ejecutar la herramienta
-        String result = executeTool(toolName, arguments);
-
-        Map<String, Object> response = new HashMap<>();
-        List<Map<String, Object>> content = new ArrayList<>();
-        Map<String, Object> textContent = new HashMap<>();
-        textContent.put("type", "text");
-        textContent.put("text", result);
-        content.add(textContent);
-        response.put("content", content);
-        return response;
+        
+        return result;
     }
 
     private String executeTool(String toolName, Map<String, Object> arguments) {
+        System.err.println("🔍 Ejecutando: " + toolName);
+        
         switch (toolName) {
-            case "calculator":
-                return evaluateExpression((String) arguments.get("expression"));
-            case "echo":
-                return "Echo: " + arguments.get("message");
             case "scan_repo":
-                return securityAnalyzer.scanRepository((String) arguments.get("repo_path"));
-            case "check_policies":
-                return policyAnalyzer.analyzeRepository((String) arguments.get("code_path"));
-            case "analyze_file":
-                return policyAnalyzer.analyzeCode((String) arguments.get("code_path"));
+                String repoPath = (String) arguments.get("repo_path");
+                if (repoPath == null) {
+                    return "❌ Error: repo_path es requerido";
+                }
+                System.err.println("🔍 Escaneando repositorio: " + repoPath);
+                return securityAnalyzer.scanRepository(repoPath);
+                
+            case "analyze_policies":
+                String codePath = (String) arguments.get("code_path");
+                if (codePath == null) {
+                    return "❌ Error: code_path es requerido";
+                }
+                System.err.println("📋 Analizando políticas: " + codePath);
+                return policyAnalyzer.analyzeRepository(codePath);
+                
             default:
-                return "Unknown tool: " + toolName;
+                return "❌ Herramienta desconocida: " + toolName;
         }
     }
 
     private String evaluateExpression(String expression) {
         try {
+            // Validar expresión para evitar inyección de código
+            if (!expression.matches("^[0-9\\s+\\-*/().]+$")) {
+                return "Error: Invalid expression format - only numbers and basic operators allowed";
+            }
+            
             if (expression.matches("\\d+\\s*[+\\-*/]\\s*\\d+")) {
                 String[] parts = expression.split("\\s*([+\\-*/])\\s*");
                 if (parts.length >= 2) {
@@ -271,6 +287,8 @@ public class MCPServer {
                 }
             }
             return "Error: Invalid expression format";
+        } catch (NumberFormatException e) {
+            return "Error: Invalid number format";
         } catch (Exception e) {
             return "Error: " + e.getMessage();
         }
