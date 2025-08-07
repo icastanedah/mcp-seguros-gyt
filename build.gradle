@@ -17,6 +17,8 @@ application {
 }
 
 jar {
+    archiveBaseName = 'mcp-graddle'
+    archiveVersion = ''
     manifest {
         attributes 'Main-Class': 'org.example.mcp.MCPServer'
     }

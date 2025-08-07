@@ -89,6 +89,9 @@ npx @modelcontextprotocol/inspector@0.15.0 java -jar build/libs/mcp-graddle.jar
 # Usar el script de inicio (recomendado)
 start-mcp.bat
 
+# O usar la versión simple
+start-mcp-simple.bat
+
 # O manualmente
 npx @modelcontextprotocol/inspector@0.15.0 java -jar build\libs\mcp-graddle.jar
 ```
@@ -208,7 +211,53 @@ file.encoding=UTF-8
 file.separator=/
 ```
 
-## 🐛 Solución de Problemas
+## 🔧 Solución de Problemas
+
+### Windows
+
+#### Error: "Unable to access jarfile build\libs\mcp-graddle.jar"
+
+**Causa**: El archivo JAR no se encuentra o no se compiló correctamente.
+
+**Solución**:
+1. **Verificar que estás en el directorio correcto:**
+   ```cmd
+   cd C:\ruta\a\mcp-seguros-gyt
+   ```
+
+2. **Compilar manualmente:**
+   ```cmd
+   gradlew.bat clean build
+   ```
+
+3. **Verificar que el JAR existe:**
+   ```cmd
+   dir build\libs
+   ```
+
+4. **Usar la ruta absoluta:**
+   ```cmd
+   npx @modelcontextprotocol/inspector@0.15.0 java -jar "C:\ruta\completa\a\mcp-seguros-gyt\build\libs\mcp-graddle.jar"
+   ```
+
+#### Error: "gradlew.bat no encontrado"
+
+**Solución**:
+1. **Verificar que gradlew.bat existe:**
+   ```cmd
+   dir gradlew.bat
+   ```
+
+2. **Si no existe, usar gradlew:**
+   ```cmd
+   gradlew clean build
+   ```
+
+3. **O instalar Gradle globalmente:**
+   ```cmd
+   choco install gradle
+   gradle clean build
+   ```
 
 ### Error: "Request timed out"
 
